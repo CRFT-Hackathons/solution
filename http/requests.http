@@ -1,0 +1,24 @@
+@baseURL=http://localhost:8080/api/v1
+@apiKey=7bcd6334-bc2e-4cbf-b9d4-61cb9e868869
+@sessionId=ca2954cf-d72c-4e6f-87b9-09be026d3f62
+
+### start session
+POST {{baseURL}}/session/start
+Content-Type: application/json
+API-KEY: {{apiKey}}
+
+### End session
+POST {{baseURL}}/session/end
+Content-Type: application/json
+API-KEY: {{apiKey}}
+
+### Play a new day
+POST {{baseURL}}/play/round
+Content-Type: application/json
+API-KEY: {{apiKey}}
+SESSION-ID: {{sessionId}}
+
+{
+  "day": 0,
+  "movements": []
+}
