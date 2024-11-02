@@ -1,11 +1,19 @@
 from queue import PriorityQueue
 import pandas as pd
-from pprint import pprint
 
 import api
 import api.models.movement
 from api.rest import ApiException
 import api.models
+import logging
+
+logging.basicConfig(
+    filename="stats.log",
+    filemode="a",
+    format="%(message)s",
+    datefmt="%H:%M:%S",
+    level=logging.DEBUG,
+)
 
 
 def calculate_priority_score(demand, current_day, w1=1, w2=0.005, w3=1):
@@ -70,14 +78,13 @@ with api.ApiClient(config) as api_client:
         day_0 = client.play_round(
             config.api_key, session_id, api.models.DayRequest(day=0, movements=[])
         )
-        print(day_0.demand)
 
         for demand in day_0.demand:
             priority_score = calculate_priority_score(demand, 0)
             scheduler.put((-priority_score, demand))
 
         for current_day in range(1, 42):
-            print(f"DAY {current_day}")
+            logging.info(f"DAY {current_day}")
             # ---- DAY INITIALIZATION ----
             # 1. Update stocks from finalized movements
             for movement in movements[current_day]:
@@ -161,14 +168,13 @@ with api.ApiClient(config) as api_client:
                     movements=movements[current_day],
                 ),
             )
+            logging.info(round_res.penalties)
             new_demands = round_res.demand
             for new_demand in new_demands:
                 priority_score = calculate_priority_score(new_demand, current_day)
                 scheduler.put((-priority_score, new_demand))
 
-                pprint(round_res.model_dump())
-
     except ApiException as e:
-        print("Exception when calling PlayControllerApi->play_round: %s\n" % e)
+        logging.info("Exception when calling PlayControllerApi->play_round: %s\n" % e)
         res = client.stop_session(config.api_key)
-        pprint(res)
+        logging.info(res)
