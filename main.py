@@ -43,7 +43,7 @@ config = api.Configuration(
 connections = pd.read_csv("resources/connections.csv", engine="pyarrow", sep=";")
 connections["blocked"] = False
 customers = pd.read_csv("resources/customers.csv", engine="pyarrow", sep=";")
-demands = pd.read_csv("resources/demands.csv", engine="pyarrow", sep=";")
+# demands = pd.read_csv("resources/demands.csv", engine="pyarrow", sep=";")
 refineries = pd.read_csv("resources/refineries.csv", engine="pyarrow", sep=";")
 tanks = pd.read_csv("resources/tanks.csv", engine="pyarrow", sep=";")
 
