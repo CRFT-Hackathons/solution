@@ -1,4 +1,5 @@
 from queue import PriorityQueue
+import uuid
 import pandas as pd
 
 import api
@@ -106,6 +107,8 @@ ending_movements = [[] for i in range(42)]
 refineries = refineries.rename(columns={"initial_stock": "stock"})
 tanks = tanks.rename(columns={"initial_stock": "stock"})
 
+demands_amounts = pd.DataFrame({}, columns=["demand_id", "delta"])
+
 with api.ApiClient(config) as api_client:
     client = api.PlayControllerApi(api_client)
 
@@ -116,8 +119,13 @@ with api.ApiClient(config) as api_client:
         )
 
         for demand in day_0.demand:
+            demand.id = str(uuid.uuid4())
             priority_score = calculate_priority_score(demand, 0)
             scheduler.put((-priority_score, demand))
+            demands_amounts.loc[len(demands_amounts.index)] = {
+                "demand_id": demand.id,
+                "delta": demand.amount,
+            }
 
         for current_day in range(1, 42):
             logging.info(f"DAY {current_day}")
@@ -149,6 +157,9 @@ with api.ApiClient(config) as api_client:
             # Process demands in the scheduler
             while not scheduler.empty():
                 _, demand = scheduler.get()
+                demand_amount = demands_amounts[
+                    demands_amounts["demand_id"] == demand.id
+                ].iloc[0]
 
                 upstream_connection = connections[
                     (connections["to_id"] == demand.customer_id)
@@ -170,9 +181,10 @@ with api.ApiClient(config) as api_client:
                     upstream_connection["max_capacity"],
                     t2_tank["max_output"],
                     t3_customer["max_input"],
+                    demand_amount["delta"],
                 )
 
-                if t2_stock >= max_delivery and (
+                if t2_stock >= max_delivery > 0 and (
                     demand.end_day
                     >= (current_day + upstream_connection["lead_time_days"])
                     > demand.start_day
@@ -187,6 +199,29 @@ with api.ApiClient(config) as api_client:
                     connections.loc[
                         connections["id"] == upstream_connection["id"], "blocked"
                     ] = True
+                    demands_amounts.loc[
+                        demands_amounts["demand_id"] == demand.id, "delta"
+                    ] -= int(max_delivery)
+
+                    # scheduler.put(
+                    #     (
+                    #         -1 * calculate_priority_score(demand, current_day),
+                    #         api.models.Demand(
+                    #             id=demand.id,
+                    #             customerId=demand.customer_id,
+                    #             amount=int(
+                    #                 demands_amounts.loc[
+                    #                     demands_amounts["demand_id"] == demand.id,
+                    #                     "delta",
+                    #                 ]
+                    #             ),
+                    #             postDay=demand.post_day,
+                    #             startDay=demand.start_day,
+                    #             endDay=demand.end_day,
+                    #         ),
+                    #         # ),
+                    #     )
+                    # )
 
             t1_final = tanks[tanks["id"].isin(t1)].copy()
             t2_final = tanks[tanks["id"].isin(t2)].copy()
@@ -291,8 +326,13 @@ with api.ApiClient(config) as api_client:
             logging.info(round_res.total_kpis)
             new_demands = round_res.demand
             for new_demand in new_demands:
+                new_demand.id = str(uuid.uuid4())
                 priority_score = calculate_priority_score(new_demand, current_day)
                 scheduler.put((-priority_score, new_demand))
+                demands_amounts.loc[len(demands_amounts.index)] = {
+                    "demand_id": new_demand.id,
+                    "delta": new_demand.amount,
+                }
 
     except ApiException as e:
         logging.info("Exception when calling PlayControllerApi->play_round: %s\n" % e)
