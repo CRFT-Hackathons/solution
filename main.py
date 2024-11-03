@@ -40,6 +40,7 @@ config = api.Configuration(
 
 # Load the data
 connections = pd.read_csv("resources/connections.csv", engine="pyarrow", sep=";")
+connections["blocked"] = False
 customers = pd.read_csv("resources/customers.csv", engine="pyarrow", sep=";")
 demands = pd.read_csv("resources/demands.csv", engine="pyarrow", sep=";")
 refineries = pd.read_csv("resources/refineries.csv", engine="pyarrow", sep=";")
@@ -54,17 +55,52 @@ mid_index = sorted_connections.shape[0] // 2
 tier1 = sorted_connections.iloc[mid_index:][["id"]]
 tier2 = sorted_connections.iloc[:mid_index][["id"]]
 
-shortest_distances = (
+# luam toate conexiunile de tip truck, le grupam dupa to_id, care este sigur un customer,
+# si din fiecare grup luam conexiunea cu distanta minima; asta e lista t2-t3, t2 = t2_t3["from_id"]
+
+# TODO sort by distance and volume
+t2_t3_connections = (
+    connections[connections["connection_type"] == "TRUCK"]
+    .sort_values("distance")
+    .groupby("to_id")
+    .agg(
+        {
+            "distance": "min",
+            "from_id": "first",
+            "max_capacity": "first",
+            "lead_time_days": "first",
+            "id": "first",
+        }
+    )
+    .reset_index()
+)
+
+t2 = t2_t3_connections["from_id"]
+t3 = t2_t3_connections["to_id"]
+
+t1_t2_connections = connections[
+    (connections["connection_type"] == "PIPELINE")
+    & (connections["to_id"].isin(t2))
+    & (~connections["from_id"].isin(t3))
+]
+t1 = t1_t2_connections["from_id"]
+
+t0 = refineries["id"]
+t0_t1_connections = connections[
+    (connections["from_id"].isin(t0)) & (connections["to_id"].isin(t1))
+]
+
+dispatchers_connections = (
     sorted_connections[sorted_connections["id"].isin(tier2["id"])]
     .groupby("to_id")
-    .apply(lambda x: x.nsmallest(1, "distance"))
+    .agg({"distance": "min", "from_id": "first"})
     .reset_index(drop=True)
 )
 
 scheduler = PriorityQueue()
 
 # List for movements
-movements = [[] for i in range(42)]
+ending_movements = [[] for i in range(42)]
 
 # Rename the column "initial_stock" to "stock"
 refineries = refineries.rename(columns={"initial_stock": "stock"})
@@ -85,9 +121,10 @@ with api.ApiClient(config) as api_client:
 
         for current_day in range(1, 42):
             logging.info(f"DAY {current_day}")
+            print(f"DAY {current_day}")
             # ---- DAY INITIALIZATION ----
             # 1. Update stocks from finalized movements
-            for movement in movements[current_day]:
+            for movement in ending_movements[current_day]:
                 connection_id = movement.connection_id
                 amount = movement.amount
 
@@ -101,62 +138,144 @@ with api.ApiClient(config) as api_client:
                 elif to_id in customers["id"].values:
                     # Any stock update logic for customer-specific handling here
                     pass
-            movements[current_day] = []
+                connections.loc[connections["id"] == connection_id, "blocked"] = False
 
             # 2. Produce stock in refineries
             refineries["stock"] += refineries["production"]
+
+            movements: list[api.models.Movement] = []
 
             # ---- SCHEDULER EXECUTION ----
             # Process demands in the scheduler
             while not scheduler.empty():
                 _, demand = scheduler.get()
 
-                customer_id = demand.customer_id
-                quantity_needed = demand.amount
-
-                # Find the best available tank for this customer
-                available_tanks = shortest_distances[
-                    shortest_distances["to_id"] == customer_id
+                upstream_connection = connections[
+                    (connections["to_id"] == demand.customer_id)
+                    & (connections["connection_type"] == "TRUCK")
+                    & (~connections["blocked"])
                 ]
+                if upstream_connection.empty:
+                    continue
 
-                if available_tanks.empty:
-                    continue  # No tank available for this customer
+                upstream_connection = upstream_connection.iloc[0]
+                t2_id = upstream_connection["from_id"]
+                t2_tank = tanks[tanks["id"] == t2_id].iloc[0]
+                t3_customer = customers[
+                    customers["id"] == upstream_connection["to_id"]
+                ].iloc[0]
 
-                best_tank_info = available_tanks.iloc[0]
-                best_tank_id = best_tank_info["from_id"]
-                best_tank = tanks[tanks["id"] == best_tank_id].iloc[0]
+                t2_stock = t2_tank["stock"]
+                max_delivery = min(
+                    upstream_connection["max_capacity"],
+                    t2_tank["max_output"],
+                    t3_customer["max_input"],
+                )
 
-                # Check if tank has enough stock and capacity
-                available_stock = best_tank["stock"]
-                if available_stock >= quantity_needed:
-                    # Full quantity can be moved
-                    tanks.loc[tanks["id"] == best_tank_id, "stock"] -= quantity_needed
-                    if current_day + best_tank_info["lead_time_days"] < len(movements):
-                        movements[
-                            current_day + best_tank_info["lead_time_days"]
-                        ].append(
-                            api.models.Movement(
-                                connectionId=best_tank_info["id"],
-                                amount=quantity_needed,
-                            )
-                        )
-                else:
-                    # Partial quantity is moved due to stock or capacity limits
-                    max_quantity = min(available_stock, best_tank["max_output"])
-                    tanks.loc[tanks["id"] == best_tank_id, "stock"] -= max_quantity
-                    movements[current_day + best_tank_info["lead_time_days"]].append(
+                if t2_stock >= max_delivery and (
+                    demand.end_day
+                    >= (current_day + upstream_connection["lead_time_days"])
+                    > demand.start_day
+                ):
+                    print(f"PIPING {max_delivery} into {upstream_connection["id"]}")
+                    movements.append(
                         api.models.Movement(
-                            connectionId=best_tank_info["id"], amount=max_quantity
+                            connectionId=upstream_connection["id"],
+                            amount=int(max_delivery),
                         )
                     )
-                    # Requeue remaining demand with updated quantity
-                    remaining_quantity = quantity_needed - max_quantity
-                    scheduler.put(
-                        (
-                            -calculate_priority_score(demand, current_day),
-                            {**demand, "quantity": remaining_quantity},
-                        )
+                    connections.loc[
+                        connections["id"] == upstream_connection["id"], "blocked"
+                    ] = True
+
+            t1_final = tanks[tanks["id"].isin(t1)].copy()
+            t2_final = tanks[tanks["id"].isin(t2)].copy()
+
+            # schedule movements for filling t2
+            tanks["stock_percentage"] = tanks["stock"] / tanks["capacity"] * 100
+            for idx, tank in (
+                tanks[tanks["id"].isin(t1)].sort_values("stock_percentage").iterrows()
+            ):
+                downstream_connections = t1_t2_connections[
+                    (t1_t2_connections["from_id"] == tank["id"])
+                    & (~t1_t2_connections["blocked"])
+                ]
+                t2_tanks = t2_final[
+                    t2_final["id"].isin(downstream_connections["to_id"])
+                ]
+                t2_max_deliveries = min(
+                    downstream_connections["max_capacity"].values[0],
+                    t2_tanks["max_output"].values[0],
+                    t2_tanks["capacity"].values[0] - t2_tanks["stock"].values[0],
+                )
+                downstream_total = t2_max_deliveries
+                downstream_weights = pd.DataFrame(
+                    {
+                        "weight": t2_max_deliveries / downstream_total,
+                        "max_delivery": t2_max_deliveries,
+                    },
+                    index=downstream_connections.index,
+                )
+
+                downstream_connections = downstream_connections.reset_index()
+                downstream_connections = downstream_connections.merge(
+                    downstream_weights, left_index=True, right_index=True
+                )
+                for idx, data in downstream_connections.iterrows():
+                    amount = min(data["weight"] * tank["stock"], data["max_delivery"])
+                    movements.append(
+                        api.models.Movement(connectionId=data["id"], amount=amount)
                     )
+                    t1_final.loc[t1_final["id"] == data["from_id"], "stock"] -= amount
+                    t2_final.loc[t2_final["id"] == data["to_id"], "stock"] += amount
+                    connections.loc[connections["id"] == data["id"], "blocked"] = True
+
+            # schedule movements for filling t1
+            for idx, tank in (
+                tanks[tanks["id"].isin(t0)].sort_values("stock_percentage").iterrows()
+            ):
+                downstream_connections = t0_t1_connections[
+                    (t0_t1_connections["from_id"] == tank["id"])
+                    & (~t0_t1_connections["blocked"])
+                ]
+                t1_tanks = t1_final[
+                    t1_final["id"].isin(downstream_connections["to_id"])
+                ]
+                t1_max_deliveries = min(
+                    downstream_connections["max_capacity"].values[0],
+                    t1_tanks["max_output"].values[0],
+                    t1_tanks["capacity"].values[0] - t1_tanks["stock"].values[0],
+                )
+                downstream_total = t1_max_deliveries
+                downstream_weights = pd.DataFrame(
+                    {
+                        "weight": t1_max_deliveries / downstream_total,
+                        "max_delivery": t1_max_deliveries,
+                    },
+                    index=downstream_connections.index,
+                )
+
+                downstream_data = downstream_connections.insert(
+                    {"weight": downstream_weights, "max_delivery": t1_max_deliveries}
+                )
+                for data in downstream_connections.merge(downstream_weights):
+                    amount = data["max_delivery"]
+                    # amount = min(data["weight"] * tank["stock"], data["max_delivery"])
+                    movements.append(
+                        api.models.Movement(connectionId=data["id"], amount=amount)
+                    )
+                    refineries["stock"] -= amount
+                    t1_final[data["to_id"]] += amount
+                    connections.loc[connections["id"] == data["id"], "blocked"] = True
+
+            for movement in movements:
+                # TODO verifica cand mai multe transporturi in desfasurare se acumuleaza si dau overflow
+                ending_movements[
+                    current_day
+                    + connections[connections["id"] == movement.connection_id].iloc[0][
+                        "lead_time_days"
+                    ]
+                ].append(movement)
 
             # ---- END OF DAY UPDATES ----
             # Fetch and add new demands to the scheduler
@@ -165,10 +284,11 @@ with api.ApiClient(config) as api_client:
                 session_id,
                 api.models.DayRequest(
                     day=current_day,
-                    movements=movements[current_day],
+                    movements=movements,
                 ),
             )
             logging.info(round_res.penalties)
+            logging.info(round_res.total_kpis)
             new_demands = round_res.demand
             for new_demand in new_demands:
                 priority_score = calculate_priority_score(new_demand, current_day)
