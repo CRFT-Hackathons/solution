@@ -36,16 +36,25 @@ def calculate_priority_score(demand, current_day, w1=1, w2=0.005, w3=1):
 
 
 config = api.Configuration(
-    host="http://localhost:8080", api_key="7bcd6334-bc2e-4cbf-b9d4-61cb9e868869"
+    # host="http://localhost:8080",
+    host="https://smarthack2024-eval.cfapps.eu12.hana.ondemand.com",
+    api_key="0177d107-0160-4c76-9512-f5c8e72eee60",
 )
 
 # Load the data
-connections = pd.read_csv("resources/connections.csv", engine="pyarrow", sep=";")
+# connections = pd.read_csv("resources/connections.csv", engine="pyarrow", sep=";")
+# connections["blocked"] = False
+# customers = pd.read_csv("resources/customers.csv", engine="pyarrow", sep=";")
+# # demands = pd.read_csv("resources/demands.csv", engine="pyarrow", sep=";")
+# refineries = pd.read_csv("resources/refineries.csv", engine="pyarrow", sep=";")
+# tanks = pd.read_csv("resources/tanks.csv", engine="pyarrow", sep=";")
+
+connections = pd.read_csv("battle/connections.csv", engine="pyarrow", sep=";")
 connections["blocked"] = False
-customers = pd.read_csv("resources/customers.csv", engine="pyarrow", sep=";")
-# demands = pd.read_csv("resources/demands.csv", engine="pyarrow", sep=";")
-refineries = pd.read_csv("resources/refineries.csv", engine="pyarrow", sep=";")
-tanks = pd.read_csv("resources/tanks.csv", engine="pyarrow", sep=";")
+customers = pd.read_csv("battle/customers.csv", engine="pyarrow", sep=";")
+# demands = pd.read_csv("battle/demands.csv", engine="pyarrow", sep=";")
+refineries = pd.read_csv("battle/refineries.csv", engine="pyarrow", sep=";")
+tanks = pd.read_csv("battle/tanks.csv", engine="pyarrow", sep=";")
 
 sorted_connections = connections[connections["connection_type"] == "TRUCK"].sort_values(
     "distance"
@@ -101,7 +110,7 @@ dispatchers_connections = (
 scheduler = PriorityQueue()
 
 # List for movements
-ending_movements = [[] for i in range(42)]
+ending_movements = [[] for i in range(43)]
 
 # Rename the column "initial_stock" to "stock"
 refineries = refineries.rename(columns={"initial_stock": "stock"})
@@ -114,6 +123,7 @@ with api.ApiClient(config) as api_client:
 
     try:
         session_id = client.start_session(config.api_key)
+        print(f"SESSION-ID {session_id}")
         day_0 = client.play_round(
             config.api_key, session_id, api.models.DayRequest(day=0, movements=[])
         )
@@ -127,7 +137,7 @@ with api.ApiClient(config) as api_client:
                 "delta": demand.amount,
             }
 
-        for current_day in range(1, 42):
+        for current_day in range(1, 43):
             logging.info(f"DAY {current_day}")
             print(f"DAY {current_day}")
             # ---- DAY INITIALIZATION ----
@@ -321,6 +331,7 @@ with api.ApiClient(config) as api_client:
                     day=current_day,
                     movements=movements,
                 ),
+                _request_timeout=3000000.0,
             )
             logging.info(round_res.penalties)
             logging.info(round_res.total_kpis)
@@ -333,7 +344,6 @@ with api.ApiClient(config) as api_client:
                     "demand_id": new_demand.id,
                     "delta": new_demand.amount,
                 }
-
     except ApiException as e:
         logging.info("Exception when calling PlayControllerApi->play_round: %s\n" % e)
         res = client.stop_session(config.api_key)

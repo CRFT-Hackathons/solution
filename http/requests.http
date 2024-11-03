@@ -1,6 +1,7 @@
-@baseURL=http://localhost:8080/api/v1
-@apiKey=7bcd6334-bc2e-4cbf-b9d4-61cb9e868869
-@sessionId=f1a41728-8ee7-4c73-a80a-bc87d332dd6d
+# @baseURL=http://localhost:8080/api/v1
+@baseURL=https://smarthack2024-eval.cfapps.eu12.hana.ondemand.com/api/v1
+@apiKey=0177d107-0160-4c76-9512-f5c8e72eee60
+@sessionId=
 
 ### start session
 POST {{baseURL}}/session/start
