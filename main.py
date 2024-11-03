@@ -1,4 +1,4 @@
-from queue import PriorityQueue
+from queue import Queue
 import uuid
 import pandas as pd
 
@@ -107,7 +107,7 @@ dispatchers_connections = (
     .reset_index(drop=True)
 )
 
-scheduler = PriorityQueue()
+scheduler = Queue()
 
 # List for movements
 ending_movements = [[] for i in range(43)]
@@ -131,7 +131,7 @@ with api.ApiClient(config) as api_client:
         for demand in day_0.demand:
             demand.id = str(uuid.uuid4())
             priority_score = calculate_priority_score(demand, 0)
-            scheduler.put((-priority_score, demand))
+            scheduler.put((priority_score, demand))
             demands_amounts.loc[len(demands_amounts.index)] = {
                 "demand_id": demand.id,
                 "delta": demand.amount,
@@ -199,7 +199,7 @@ with api.ApiClient(config) as api_client:
                     >= (current_day + upstream_connection["lead_time_days"])
                     > demand.start_day
                 ):
-                    print(f"PIPING {max_delivery} into {upstream_connection["id"]}")
+                    print(f"PIPING {max_delivery} into {upstream_connection['id']}")
                     movements.append(
                         api.models.Movement(
                             connectionId=upstream_connection["id"],
@@ -212,26 +212,6 @@ with api.ApiClient(config) as api_client:
                     demands_amounts.loc[
                         demands_amounts["demand_id"] == demand.id, "delta"
                     ] -= int(max_delivery)
-
-                    # scheduler.put(
-                    #     (
-                    #         -1 * calculate_priority_score(demand, current_day),
-                    #         api.models.Demand(
-                    #             id=demand.id,
-                    #             customerId=demand.customer_id,
-                    #             amount=int(
-                    #                 demands_amounts.loc[
-                    #                     demands_amounts["demand_id"] == demand.id,
-                    #                     "delta",
-                    #                 ]
-                    #             ),
-                    #             postDay=demand.post_day,
-                    #             startDay=demand.start_day,
-                    #             endDay=demand.end_day,
-                    #         ),
-                    #         # ),
-                    #     )
-                    # )
 
             t1_final = tanks[tanks["id"].isin(t1)].copy()
             t2_final = tanks[tanks["id"].isin(t2)].copy()
@@ -339,11 +319,12 @@ with api.ApiClient(config) as api_client:
             for new_demand in new_demands:
                 new_demand.id = str(uuid.uuid4())
                 priority_score = calculate_priority_score(new_demand, current_day)
-                scheduler.put((-priority_score, new_demand))
+                scheduler.put((priority_score, new_demand))
                 demands_amounts.loc[len(demands_amounts.index)] = {
                     "demand_id": new_demand.id,
                     "delta": new_demand.amount,
                 }
+
     except ApiException as e:
         logging.info("Exception when calling PlayControllerApi->play_round: %s\n" % e)
         res = client.stop_session(config.api_key)

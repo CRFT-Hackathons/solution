@@ -1,0 +1,349 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script>function neighbourhoodHighlight(params) {
+  // console.log("in nieghbourhoodhighlight");
+  allNodes = nodes.get({ returnType: "Object" });
+  // originalNodes = JSON.parse(JSON.stringify(allNodes));
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    highlightActive = true;
+    var i, j;
+    var selectedNode = params.nodes[0];
+    var degrees = 2;
+
+    // mark all nodes as hard to read.
+    for (let nodeId in allNodes) {
+      // nodeColors[nodeId] = allNodes[nodeId].color;
+      allNodes[nodeId].color = "rgba(200,200,200,0.5)";
+      if (allNodes[nodeId].hiddenLabel === undefined) {
+        allNodes[nodeId].hiddenLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
+      }
+    }
+    var connectedNodes = network.getConnectedNodes(selectedNode);
+    var allConnectedNodes = [];
+
+    // get the second degree nodes
+    for (i = 1; i < degrees; i++) {
+      for (j = 0; j < connectedNodes.length; j++) {
+        allConnectedNodes = allConnectedNodes.concat(
+          network.getConnectedNodes(connectedNodes[j])
+        );
+      }
+    }
+
+    // all second degree nodes get a different color and their label back
+    for (i = 0; i < allConnectedNodes.length; i++) {
+      // allNodes[allConnectedNodes[i]].color = "pink";
+      allNodes[allConnectedNodes[i]].color = "rgba(150,150,150,0.75)";
+      if (allNodes[allConnectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[allConnectedNodes[i]].label =
+          allNodes[allConnectedNodes[i]].hiddenLabel;
+        allNodes[allConnectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
+
+    // all first degree nodes get their own color and their label back
+    for (i = 0; i < connectedNodes.length; i++) {
+      // allNodes[connectedNodes[i]].color = undefined;
+      allNodes[connectedNodes[i]].color = nodeColors[connectedNodes[i]];
+      if (allNodes[connectedNodes[i]].hiddenLabel !== undefined) {
+        allNodes[connectedNodes[i]].label =
+          allNodes[connectedNodes[i]].hiddenLabel;
+        allNodes[connectedNodes[i]].hiddenLabel = undefined;
+      }
+    }
+
+    // the main node gets its own color and its label back.
+    // allNodes[selectedNode].color = undefined;
+    allNodes[selectedNode].color = nodeColors[selectedNode];
+    if (allNodes[selectedNode].hiddenLabel !== undefined) {
+      allNodes[selectedNode].label = allNodes[selectedNode].hiddenLabel;
+      allNodes[selectedNode].hiddenLabel = undefined;
+    }
+  } else if (highlightActive === true) {
+    // console.log("highlightActive was true");
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      // allNodes[nodeId].color = "purple";
+      allNodes[nodeId].color = nodeColors[nodeId];
+      // delete allNodes[nodeId].color;
+      if (allNodes[nodeId].hiddenLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].hiddenLabel;
+        allNodes[nodeId].hiddenLabel = undefined;
+      }
+    }
+    highlightActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    // console.log("Nothing was selected");
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        // console.log(allNodes[nodeId]);
+        // allNodes[nodeId].color = {};
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function filterHighlight(params) {
+  allNodes = nodes.get({ returnType: "Object" });
+  // if something is selected:
+  if (params.nodes.length > 0) {
+    filterActive = true;
+    let selectedNodes = params.nodes;
+
+    // hiding all nodes and saving the label
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = true;
+      if (allNodes[nodeId].savedLabel === undefined) {
+        allNodes[nodeId].savedLabel = allNodes[nodeId].label;
+        allNodes[nodeId].label = undefined;
+      }
+    }
+
+    for (let i=0; i < selectedNodes.length; i++) {
+      allNodes[selectedNodes[i]].hidden = false;
+      if (allNodes[selectedNodes[i]].savedLabel !== undefined) {
+        allNodes[selectedNodes[i]].label = allNodes[selectedNodes[i]].savedLabel;
+        allNodes[selectedNodes[i]].savedLabel = undefined;
+      }
+    }
+
+  } else if (filterActive === true) {
+    // reset all nodes
+    for (let nodeId in allNodes) {
+      allNodes[nodeId].hidden = false;
+      if (allNodes[nodeId].savedLabel !== undefined) {
+        allNodes[nodeId].label = allNodes[nodeId].savedLabel;
+        allNodes[nodeId].savedLabel = undefined;
+      }
+    }
+    filterActive = false;
+  }
+
+  // transform the object into an array
+  var updateArray = [];
+  if (params.nodes.length > 0) {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  } else {
+    for (let nodeId in allNodes) {
+      if (allNodes.hasOwnProperty(nodeId)) {
+        updateArray.push(allNodes[nodeId]);
+      }
+    }
+    nodes.update(updateArray);
+  }
+}
+
+function selectNode(nodes) {
+  network.selectNodes(nodes);
+  neighbourhoodHighlight({ nodes: nodes });
+  return nodes;
+}
+
+function selectNodes(nodes) {
+  network.selectNodes(nodes);
+  filterHighlight({nodes: nodes});
+  return nodes;
+}
+
+function highlightFilter(filter) {
+  let selectedNodes = []
+  let selectedProp = filter['property']
+  if (filter['item'] === 'node') {
+    let allNodes = nodes.get({ returnType: "Object" });
+    for (let nodeId in allNodes) {
+      if (allNodes[nodeId][selectedProp] && filter['value'].includes((allNodes[nodeId][selectedProp]).toString())) {
+        selectedNodes.push(nodeId)
+      }
+    }
+  }
+  else if (filter['item'] === 'edge'){
+    let allEdges = edges.get({returnType: 'object'});
+    // check if the selected property exists for selected edge and select the nodes connected to the edge
+    for (let edge in allEdges) {
+      if (allEdges[edge][selectedProp] && filter['value'].includes((allEdges[edge][selectedProp]).toString())) {
+        selectedNodes.push(allEdges[edge]['from'])
+        selectedNodes.push(allEdges[edge]['to'])
+      }
+    }
+  }
+  selectNodes(selectedNodes)
+}</script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+            
+            
+            
+            
+            
+
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 750px;
+                 background-color: #222222;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "font": {"color": "white"}, "id": "7a029139-2799-4826-bd20-ef1a903b1424", "label": "7a029139-2799-4826-bd20-ef1a903b1424", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "1c32f877-4f46-4a0c-bd22-516f48e63e1a", "label": "1c32f877-4f46-4a0c-bd22-516f48e63e1a", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "792ab988-434a-477a-978c-1e55eeb62a12", "label": "792ab988-434a-477a-978c-1e55eeb62a12", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "1d40181c-aa3c-4ca6-b187-5da79f533544", "label": "1d40181c-aa3c-4ca6-b187-5da79f533544", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "acd69b3f-12ba-412f-92a4-c3616d7e5603", "label": "acd69b3f-12ba-412f-92a4-c3616d7e5603", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "6283ec37-50a4-4b29-a2aa-91dfe4a591b8", "label": "6283ec37-50a4-4b29-a2aa-91dfe4a591b8", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "7b3d8710-91f3-4ca3-9dff-cc210ff0c39c", "label": "7b3d8710-91f3-4ca3-9dff-cc210ff0c39c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "dd88f465-509a-4cde-8a06-f67a26ce4efb", "label": "dd88f465-509a-4cde-8a06-f67a26ce4efb", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "2cecc8fb-94a8-4740-a40b-1141470799b8", "label": "2cecc8fb-94a8-4740-a40b-1141470799b8", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "1c88f357-e3de-4f9a-ad3c-70254b75ad7c", "label": "1c88f357-e3de-4f9a-ad3c-70254b75ad7c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "4350c49a-7c50-4970-a32d-747386e1cf03", "label": "4350c49a-7c50-4970-a32d-747386e1cf03", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "9e222434-cf28-4edf-bca7-8a5e5297e2c3", "label": "9e222434-cf28-4edf-bca7-8a5e5297e2c3", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "baffeeb3-bba0-4096-8ec1-505920b33ca6", "label": "baffeeb3-bba0-4096-8ec1-505920b33ca6", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "51fc8296-7e84-469f-9ceb-d2ea82069934", "label": "51fc8296-7e84-469f-9ceb-d2ea82069934", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "84f79d07-e99e-49ec-9cb6-c31b94570f1d", "label": "84f79d07-e99e-49ec-9cb6-c31b94570f1d", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "dc904a06-e8a7-4143-a84c-b0f928ea9e23", "label": "dc904a06-e8a7-4143-a84c-b0f928ea9e23", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "d9e8d1e6-4a4d-4781-9acc-a832901add4f", "label": "d9e8d1e6-4a4d-4781-9acc-a832901add4f", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "0748a8fa-1821-4a9d-8f4f-10181d462131", "label": "0748a8fa-1821-4a9d-8f4f-10181d462131", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "e19e2a35-ea5c-4d81-86ab-d8ba55f747e6", "label": "e19e2a35-ea5c-4d81-86ab-d8ba55f747e6", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "11da4659-be42-4441-a624-4b4c94db09cc", "label": "11da4659-be42-4441-a624-4b4c94db09cc", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "8c3afa3c-fc5e-4faf-a704-535a035eeac3", "label": "8c3afa3c-fc5e-4faf-a704-535a035eeac3", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "62a6114a-004e-4191-a953-dd4fe79d6138", "label": "62a6114a-004e-4191-a953-dd4fe79d6138", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "c6a622a7-1ed9-4952-9c09-4e7016b62838", "label": "c6a622a7-1ed9-4952-9c09-4e7016b62838", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "c48e7c1b-8bb1-4df2-9b13-512902fd7521", "label": "c48e7c1b-8bb1-4df2-9b13-512902fd7521", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "0165ab60-2f11-4bf8-be77-e8ed9110cf6c", "label": "0165ab60-2f11-4bf8-be77-e8ed9110cf6c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "label": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "7ce08da6-4108-4bf6-9951-2a7d55a37c2c", "label": "7ce08da6-4108-4bf6-9951-2a7d55a37c2c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "e0f874ec-033d-4b55-9868-0774704856e3", "label": "e0f874ec-033d-4b55-9868-0774704856e3", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "4dfba331-cc77-4c36-8d6a-7d7fbfcbc7e2", "label": "4dfba331-cc77-4c36-8d6a-7d7fbfcbc7e2", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "814b4f08-6eb5-4b69-b2a1-eb47ff0503cf", "label": "814b4f08-6eb5-4b69-b2a1-eb47ff0503cf", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "56763333-a862-4051-987f-f34d76640a2c", "label": "56763333-a862-4051-987f-f34d76640a2c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "58ad624f-980b-4508-9d6e-1fd8aa6b3b47", "label": "58ad624f-980b-4508-9d6e-1fd8aa6b3b47", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "325f11e6-bec3-4388-b507-6b8d0a28c4dd", "label": "325f11e6-bec3-4388-b507-6b8d0a28c4dd", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a7a753a7-436d-4fd3-9836-808280bead4e", "label": "a7a753a7-436d-4fd3-9836-808280bead4e", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "37572640-6ac6-4927-af72-4602d9d9c3b0", "label": "37572640-6ac6-4927-af72-4602d9d9c3b0", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "6161a190-ff2f-4ffc-962e-c6e059906921", "label": "6161a190-ff2f-4ffc-962e-c6e059906921", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "bbfc9268-ad67-400e-974d-7928fd2ef41b", "label": "bbfc9268-ad67-400e-974d-7928fd2ef41b", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "1ef38735-6670-428d-97d4-70e06b7f5150", "label": "1ef38735-6670-428d-97d4-70e06b7f5150", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "6624a76b-9890-43dc-aa50-49e5d68e7b4f", "label": "6624a76b-9890-43dc-aa50-49e5d68e7b4f", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "be57f25a-6e2d-476a-a0c2-c2db44f384b0", "label": "be57f25a-6e2d-476a-a0c2-c2db44f384b0", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "dcbd8084-0f01-4fdf-9c98-b3c3312e761e", "label": "dcbd8084-0f01-4fdf-9c98-b3c3312e761e", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "bef371ad-2659-4dd1-86f5-5e2a288dcf16", "label": "bef371ad-2659-4dd1-86f5-5e2a288dcf16", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "3d6da370-9ffc-497c-bae3-249ff189fca8", "label": "3d6da370-9ffc-497c-bae3-249ff189fca8", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "78f4c984-0836-49aa-a301-c0909f037eff", "label": "78f4c984-0836-49aa-a301-c0909f037eff", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "412d2b90-ba5a-4ba0-8206-c07832b7ca0b", "label": "412d2b90-ba5a-4ba0-8206-c07832b7ca0b", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "6e103115-14ef-4569-97e4-01c42488976a", "label": "6e103115-14ef-4569-97e4-01c42488976a", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "fc76dacf-a109-49c2-9ad0-970ac4b76f02", "label": "fc76dacf-a109-49c2-9ad0-970ac4b76f02", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "5e31a3df-8576-40b4-a175-6edab7e16ace", "label": "5e31a3df-8576-40b4-a175-6edab7e16ace", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "6e5020f4-1db0-4fbe-abed-837289df282e", "label": "6e5020f4-1db0-4fbe-abed-837289df282e", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "7f79b7d4-6720-4dbe-a22c-f93acd4a1967", "label": "7f79b7d4-6720-4dbe-a22c-f93acd4a1967", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "db1d3d2f-cb86-42d4-9d8e-94143fbf09d9", "label": "db1d3d2f-cb86-42d4-9d8e-94143fbf09d9", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "3868929a-4cd7-4e5a-8337-38e2b109b444", "label": "3868929a-4cd7-4e5a-8337-38e2b109b444", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "9765b9e1-4c42-42be-b4a4-7c76caa6bd57", "label": "9765b9e1-4c42-42be-b4a4-7c76caa6bd57", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "199fa375-0fbd-4c3d-bbd7-5fe415f43229", "label": "199fa375-0fbd-4c3d-bbd7-5fe415f43229", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "3810fde0-bc15-40d8-aa2b-702916a96621", "label": "3810fde0-bc15-40d8-aa2b-702916a96621", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "3d61c6cd-873a-4e5d-9b04-5e1a4cbf8199", "label": "3d61c6cd-873a-4e5d-9b04-5e1a4cbf8199", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "26bbc719-6c20-4894-a7e5-41421aeb3b51", "label": "26bbc719-6c20-4894-a7e5-41421aeb3b51", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "bb6a016e-3aac-4ef6-9cd2-788b2a956b09", "label": "bb6a016e-3aac-4ef6-9cd2-788b2a956b09", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "169a8ef4-2abf-44a2-9aa1-87286403945c", "label": "169a8ef4-2abf-44a2-9aa1-87286403945c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "21b22968-9ef1-4568-bdd3-29d4488191ed", "label": "21b22968-9ef1-4568-bdd3-29d4488191ed", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "d43c034b-1640-4b90-9464-07d3825bbdc9", "label": "d43c034b-1640-4b90-9464-07d3825bbdc9", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a98d2cf8-f598-4ac7-9c2a-b4350d16b8aa", "label": "a98d2cf8-f598-4ac7-9c2a-b4350d16b8aa", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "3c56a76c-74b9-445e-a6a7-6d19ccfc5343", "label": "3c56a76c-74b9-445e-a6a7-6d19ccfc5343", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a2804371-c0bc-4f3e-b2c2-e0e9a8fe4b35", "label": "a2804371-c0bc-4f3e-b2c2-e0e9a8fe4b35", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "ab69eb80-3e17-4bb7-b1ec-1e158e945ad2", "label": "ab69eb80-3e17-4bb7-b1ec-1e158e945ad2", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "ae75ebbf-1eb8-45e9-87e5-c1c09ac26732", "label": "ae75ebbf-1eb8-45e9-87e5-c1c09ac26732", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "01b05293-060b-4c63-bcf6-43f0f55c7228", "label": "01b05293-060b-4c63-bcf6-43f0f55c7228", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "29a01589-dd03-4590-9c5e-f7081a9f8bd8", "label": "29a01589-dd03-4590-9c5e-f7081a9f8bd8", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a5d3f889-2402-402c-ac5a-d574b117c1f7", "label": "a5d3f889-2402-402c-ac5a-d574b117c1f7", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "c8334efe-8d20-4dd4-99a0-d764483da7f6", "label": "c8334efe-8d20-4dd4-99a0-d764483da7f6", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "09d62b4e-fffa-4be2-a2db-e933f1b32a6c", "label": "09d62b4e-fffa-4be2-a2db-e933f1b32a6c", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a55945a8-bef5-424a-9b57-896889360887", "label": "a55945a8-bef5-424a-9b57-896889360887", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "2526a6bb-b0e6-49bb-8a07-36d35ed80031", "label": "2526a6bb-b0e6-49bb-8a07-36d35ed80031", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "fab61b3c-24c3-4ded-8407-601c4904f41d", "label": "fab61b3c-24c3-4ded-8407-601c4904f41d", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "705e6d6a-b191-410d-937b-cfd11a3bfcb6", "label": "705e6d6a-b191-410d-937b-cfd11a3bfcb6", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "81376f91-5a02-4999-86eb-2a35da1367e3", "label": "81376f91-5a02-4999-86eb-2a35da1367e3", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "ea4ecb25-70dd-4c79-9a6b-2dd72f230d39", "label": "ea4ecb25-70dd-4c79-9a6b-2dd72f230d39", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "17a09b4d-5701-4406-952f-93261e3d11be", "label": "17a09b4d-5701-4406-952f-93261e3d11be", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "4ed7343d-60f1-437e-bec3-24c44c7ad729", "label": "4ed7343d-60f1-437e-bec3-24c44c7ad729", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "5d9879a2-dccc-49a8-8744-28386dd1191a", "label": "5d9879a2-dccc-49a8-8744-28386dd1191a", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "7532e3a4-379a-4000-be2f-0cf4d8eb2c71", "label": "7532e3a4-379a-4000-be2f-0cf4d8eb2c71", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "85f33cc2-0c09-4264-ab19-12d2229cd19a", "label": "85f33cc2-0c09-4264-ab19-12d2229cd19a", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "ba3ea7f9-8af0-4a9b-9086-d5e12f41cff1", "label": "ba3ea7f9-8af0-4a9b-9086-d5e12f41cff1", "shape": "dot"}, {"color": "#97c2fc", "font": {"color": "white"}, "id": "a8e11c8e-df93-4021-ab1b-0b8c60304725", "label": "a8e11c8e-df93-4021-ab1b-0b8c60304725", "shape": "dot"}]);
+                  edges = new vis.DataSet([{"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "37572640-6ac6-4927-af72-4602d9d9c3b0", "value": 607}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "a8e11c8e-df93-4021-ab1b-0b8c60304725", "value": 359}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "1d40181c-aa3c-4ca6-b187-5da79f533544", "value": 227}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "412d2b90-ba5a-4ba0-8206-c07832b7ca0b", "value": 424}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "8c3afa3c-fc5e-4faf-a704-535a035eeac3", "value": 233}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "a7a753a7-436d-4fd3-9836-808280bead4e", "value": 446}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "85f33cc2-0c09-4264-ab19-12d2229cd19a", "value": 688}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "5e31a3df-8576-40b4-a175-6edab7e16ace", "value": 410}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "6624a76b-9890-43dc-aa50-49e5d68e7b4f", "value": 609}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "11da4659-be42-4441-a624-4b4c94db09cc", "value": 137}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "7b3d8710-91f3-4ca3-9dff-cc210ff0c39c", "value": 243}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "c48e7c1b-8bb1-4df2-9b13-512902fd7521", "value": 480}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "01b05293-060b-4c63-bcf6-43f0f55c7228", "value": 510}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "0165ab60-2f11-4bf8-be77-e8ed9110cf6c", "value": 307}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "a2804371-c0bc-4f3e-b2c2-e0e9a8fe4b35", "value": 517}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "dcbd8084-0f01-4fdf-9c98-b3c3312e761e", "value": 437}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "199fa375-0fbd-4c3d-bbd7-5fe415f43229", "value": 211}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "fc76dacf-a109-49c2-9ad0-970ac4b76f02", "value": 455}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "d9e8d1e6-4a4d-4781-9acc-a832901add4f", "value": 390}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "a55945a8-bef5-424a-9b57-896889360887", "value": 656}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "ea4ecb25-70dd-4c79-9a6b-2dd72f230d39", "value": 550}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "be57f25a-6e2d-476a-a0c2-c2db44f384b0", "value": 555}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "4dfba331-cc77-4c36-8d6a-7d7fbfcbc7e2", "value": 497}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "dc904a06-e8a7-4143-a84c-b0f928ea9e23", "value": 668}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "baffeeb3-bba0-4096-8ec1-505920b33ca6", "value": 633}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "ab69eb80-3e17-4bb7-b1ec-1e158e945ad2", "value": 699}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "3868929a-4cd7-4e5a-8337-38e2b109b444", "value": 262}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "29a01589-dd03-4590-9c5e-f7081a9f8bd8", "value": 125}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "81376f91-5a02-4999-86eb-2a35da1367e3", "value": 356}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "62a6114a-004e-4191-a953-dd4fe79d6138", "value": 216}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "17a09b4d-5701-4406-952f-93261e3d11be", "value": 168}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "c8334efe-8d20-4dd4-99a0-d764483da7f6", "value": 196}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "3810fde0-bc15-40d8-aa2b-702916a96621", "value": 146}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "fab61b3c-24c3-4ded-8407-601c4904f41d", "value": 417}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "acd69b3f-12ba-412f-92a4-c3616d7e5603", "value": 525}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "3d61c6cd-873a-4e5d-9b04-5e1a4cbf8199", "value": 698}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "db1d3d2f-cb86-42d4-9d8e-94143fbf09d9", "value": 390}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "c6a622a7-1ed9-4952-9c09-4e7016b62838", "value": 646}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "5d9879a2-dccc-49a8-8744-28386dd1191a", "value": 455}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "3d6da370-9ffc-497c-bae3-249ff189fca8", "value": 564}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "7ce08da6-4108-4bf6-9951-2a7d55a37c2c", "value": 659}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "4ed7343d-60f1-437e-bec3-24c44c7ad729", "value": 144}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "58ad624f-980b-4508-9d6e-1fd8aa6b3b47", "value": 389}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "09d62b4e-fffa-4be2-a2db-e933f1b32a6c", "value": 685}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "e0f874ec-033d-4b55-9868-0774704856e3", "value": 526}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "2526a6bb-b0e6-49bb-8a07-36d35ed80031", "value": 471}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "bb6a016e-3aac-4ef6-9cd2-788b2a956b09", "value": 150}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "9765b9e1-4c42-42be-b4a4-7c76caa6bd57", "value": 550}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "51fc8296-7e84-469f-9ceb-d2ea82069934", "value": 224}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "1c88f357-e3de-4f9a-ad3c-70254b75ad7c", "value": 228}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "7a029139-2799-4826-bd20-ef1a903b1424", "value": 525}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "3c56a76c-74b9-445e-a6a7-6d19ccfc5343", "value": 527}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "dd88f465-509a-4cde-8a06-f67a26ce4efb", "value": 486}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "814b4f08-6eb5-4b69-b2a1-eb47ff0503cf", "value": 589}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "e19e2a35-ea5c-4d81-86ab-d8ba55f747e6", "value": 352}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "0748a8fa-1821-4a9d-8f4f-10181d462131", "value": 513}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "4350c49a-7c50-4970-a32d-747386e1cf03", "value": 419}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "169a8ef4-2abf-44a2-9aa1-87286403945c", "value": 447}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "26bbc719-6c20-4894-a7e5-41421aeb3b51", "value": 278}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "705e6d6a-b191-410d-937b-cfd11a3bfcb6", "value": 454}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "325f11e6-bec3-4388-b507-6b8d0a28c4dd", "value": 651}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "1c32f877-4f46-4a0c-bd22-516f48e63e1a", "value": 474}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "84f79d07-e99e-49ec-9cb6-c31b94570f1d", "value": 189}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "6e5020f4-1db0-4fbe-abed-837289df282e", "value": 312}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "d43c034b-1640-4b90-9464-07d3825bbdc9", "value": 425}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "bef371ad-2659-4dd1-86f5-5e2a288dcf16", "value": 145}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "792ab988-434a-477a-978c-1e55eeb62a12", "value": 485}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "2cecc8fb-94a8-4740-a40b-1141470799b8", "value": 382}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "78f4c984-0836-49aa-a301-c0909f037eff", "value": 194}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "ae75ebbf-1eb8-45e9-87e5-c1c09ac26732", "value": 233}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "ba3ea7f9-8af0-4a9b-9086-d5e12f41cff1", "value": 646}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "bbfc9268-ad67-400e-974d-7928fd2ef41b", "value": 499}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "7f79b7d4-6720-4dbe-a22c-f93acd4a1967", "value": 470}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "a98d2cf8-f598-4ac7-9c2a-b4350d16b8aa", "value": 562}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "7532e3a4-379a-4000-be2f-0cf4d8eb2c71", "value": 394}, {"from": "21b22968-9ef1-4568-bdd3-29d4488191ed", "to": "6e103115-14ef-4569-97e4-01c42488976a", "value": 651}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "6283ec37-50a4-4b29-a2aa-91dfe4a591b8", "value": 238}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "6161a190-ff2f-4ffc-962e-c6e059906921", "value": 547}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "56763333-a862-4051-987f-f34d76640a2c", "value": 423}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "1ef38735-6670-428d-97d4-70e06b7f5150", "value": 299}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "a5d3f889-2402-402c-ac5a-d574b117c1f7", "value": 665}, {"from": "87a8efdf-9da5-4b21-ab65-f6663ea23cd1", "to": "9e222434-cf28-4edf-bca7-8a5e5297e2c3", "value": 602}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {
+    "configure": {
+        "enabled": false
+    },
+    "edges": {
+        "color": {
+            "inherit": true
+        },
+        "smooth": {
+            "enabled": true,
+            "type": "dynamic"
+        }
+    },
+    "interaction": {
+        "dragNodes": true,
+        "hideEdgesOnDrag": false,
+        "hideNodesOnDrag": false
+    },
+    "physics": {
+        "enabled": true,
+        "stabilization": {
+            "enabled": true,
+            "fit": true,
+            "iterations": 1000,
+            "onlyDynamicEdges": false,
+            "updateInterval": 50
+        }
+    }
+};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
